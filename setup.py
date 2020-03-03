@@ -15,7 +15,7 @@ REQUIRES_PYTHON = '>=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*'
 VERSION = '0.1.0'
 
 REQUIRED = [
-    'wmsigner==0.1.1', 'lxml==4.5.0', 'requests==2.23.0', 'xmltodict==0.12.0'
+    'wmsigner==0.1.1', 'lxml==4.5.0', 'requests==2.20.0', 'xmltodict==0.12.0'
 ]
 
 TEST_REQUIREMENTS = [

@@ -48,12 +48,11 @@ setup(
     author_email=EMAIL,
     python_requires=REQUIRES_PYTHON,
     url=URL,
-    packages=find_packages(exclude=["tests", "*.tests", "*.tests.*", "tests.*"]),
+    packages=find_packages(exclude=["tests", ]),
     install_requires=REQUIRED,
     tests_require=TEST_REQUIREMENTS,
     include_package_data=True,
     classifiers=[
-
         'Intended Audience :: Developers',
         'Natural Language :: English',
         'Natural Language :: Russian',

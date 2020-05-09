@@ -3,5 +3,6 @@ __pycache__/
 *$py.class
 
 .idea
+.vscode
 .tox
 *.egg-info/

@@ -1,53 +1,39 @@
-#-*- coding: utf-8 -*-
-import logging
-
-from lxml import etree
-import requests as r
-from pprint import pprint, pformat
-import uuid
-import xmltodict
+# -*- coding: utf-8 -*-
 import os
-
 import ssl
+from pprint import pformat
 
+import xmltodict
+from lxml import etree
+from requests import Session
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.poolmanager import PoolManager
-from requests.exceptions import SSLError
 from wmsigner import Signer
 
 
 class Ssl3HttpAdapter(HTTPAdapter):
-
     """Transport adapter" that allows us to use SSLv3."""
 
     def init_poolmanager(self, connections, maxsize, block=False):
-
-        self.poolmanager = PoolManager(num_pools=connections,
-                                       maxsize=maxsize,
-                                       block=block,
-                                       ssl_version=ssl.PROTOCOL_SSLv23)
+        self.poolmanager = PoolManager(
+            num_pools=connections,
+            maxsize=maxsize,
+            block=block,
+            ssl_version=ssl.PROTOCOL_SSLv23
+        )
 
 
 class AuthInterface(object):
-
-    """
-    Интерфейс аунтефикации
-    """
+    """Интерфейс аунтефикации."""
 
     def wrap_request(self, request_params):
-        """
-
-        """
         return request_params
 
     def wrap_body_tree(self, tree):
-        """
-
-        """
         return tree
 
     def get_url_by_name(self, name):
-        raise NotImplemented
+        raise NotImplementedError
 
 
 class WMLightAuthInterface(AuthInterface):
@@ -57,7 +43,6 @@ class WMLightAuthInterface(AuthInterface):
             raise ValueError("Incorrect path to pub certificate")
         if priv_key and not os.path.exists(priv_key):
             raise ValueError("Incorrect path to private key")
-
         self.cert = os.path.abspath(
             pub_cert) if priv_key is None else (os.path.abspath(pub_cert),
                                                 os.path.abspath(priv_key))
@@ -73,19 +58,20 @@ class WMLightAuthInterface(AuthInterface):
 
 
 class WMProAuthInterface(AuthInterface):
-    SIGN_STRUCTURE = {"testwmpurse": ("wmid", "purse"),
-                      "getpurses": ("wmid", "reqn"),
-                      "invoice": ("orderid", "customerwmid", "storepurse", "amount", "desc",
-                                  "address", "period", "expiration", "reqn"),
-                      "trans": ("reqn", "tranid", "pursesrc", "pursedest", "amount",
-                                "period", "pcode", "desc", "wminvid"),
-                      "getoperations": ("purse", "reqn"),
-                      "getoutinvoices": ("purse", "reqn"),
-                      "finishprotect": ("wmtranid", "pcode", "reqn"),
-                      "message": ("receiverwmid", "reqn", "msgtext"),
-                      "testsign": ("wmid", "wmid", "plan", "sign"),
-                      "getininvoices": ("wmid", "wminvid",
-                                        "datestart", "datefinish", "reqn")}
+    SIGN_STRUCTURE = {
+        "testwmpurse": ("wmid", "purse"),
+        "getpurses": ("wmid", "reqn"),
+        "invoice": ("orderid", "customerwmid", "storepurse", "amount", "desc",
+                    "address", "period", "expiration", "reqn"),
+        "trans": ("reqn", "tranid", "pursesrc", "pursedest", "amount",
+                  "period", "pcode", "desc", "wminvid"),
+        "getoperations": ("purse", "reqn"),
+        "getoutinvoices": ("purse", "reqn"),
+        "finishprotect": ("wmtranid", "pcode", "reqn"),
+        "message": ("receiverwmid", "reqn", "msgtext"),
+        "testsign": ("wmid", "wmid", "plan", "sign"),
+        "getininvoices": ("wmid", "wminvid", "datestart", "datefinish", "reqn")
+    }
 
     def __init__(self, wmid, password, keys_file_path):
         self.wmid = wmid
@@ -94,7 +80,6 @@ class WMProAuthInterface(AuthInterface):
     def _get_sing(self, tree):
         interface_name = tree.findall('.//')[1].tag
         interface_tag = tree.find(interface_name)
-
         sign_params_names = self.SIGN_STRUCTURE[interface_name]
         return self.signer.sign(''.join([tree.find(param).text
                                          if tree.find(param) is not None else interface_tag.find(param).text
@@ -104,11 +89,9 @@ class WMProAuthInterface(AuthInterface):
         wmid = etree.Element('wmid')
         wmid.text = self.wmid
         tree.append(wmid)
-
         sign = etree.Element('sign')
         sign.text = self._get_sing(tree)
         tree.append(sign)
-
         return tree
 
     def get_url_by_name(self, name):
@@ -118,9 +101,8 @@ class WMProAuthInterface(AuthInterface):
 
 
 class ApiInterface(object):
+    """Основной интерфейс API.
 
-    """
-    Основной интерфейс API.
     Пример использования::
 
         api = ApiInterface(WMLightAuthInterface(
@@ -133,32 +115,53 @@ class ApiInterface(object):
     Проксирует интерфейсы X1 - X10 в соответствующие атрибуты.
     """
 
-    API_METADATA = {"FindWMPurseNew": {"root_name": "testwmpurse",
-                                       "aliases": ["x8"]},
-                    "Purses": {"root_name": "getpurses",
-                               "aliases": ["x9"],
-                               "response_name": "purses"},
-                    "Invoice": {"root_name": "invoice",
-                                "aliases": ["x1"]},
-                    "Trans": {"root_name": "trans",
-                              "aliases": ["x2"],
-                              "response_name": "operation"},
-                    "Operations": {"root_name": "getoperations",
-                                   "aliases": ["x3"],
-                                   "response_name": "operations"},
-                    "OutInvoices": {"root_name": "getoutinvoices",
-                                    "aliases": ["x4"],
-                                    "response_name": "outinvoices"},
-                    "FinishProtect": {"root_name": "finishprotect",
-                                      "aliases": ["x5"],
-                                      "response_name": "operation"},
-                    "SendMsg": {"root_name": "message",
-                                "aliases": ["x6"]},
-                    "ClassicAuth": {"root_name": "testsign",
-                                    "aliases": ["x7"]},
-                    "InInvoices": {"root_name": "getininvoices",
-                                   "aliases": ["x10"],
-                                   "response_name": "ininvoices"}}
+    API_METADATA = {
+        "FindWMPurseNew": {
+            "root_name": "testwmpurse",
+            "aliases": ["x8"]
+        },
+        "Purses": {
+            "root_name": "getpurses",
+            "aliases": ["x9"],
+            "response_name": "purses"
+        },
+        "Invoice": {
+            "root_name": "invoice",
+            "aliases": ["x1"]
+        },
+        "Trans": {
+            "root_name": "trans",
+            "aliases": ["x2"],
+            "response_name": "operation"
+        },
+        "Operations": {
+            "root_name": "getoperations",
+            "aliases": ["x3"],
+            "response_name": "operations"
+        },
+        "OutInvoices": {
+            "root_name": "getoutinvoices",
+            "aliases": ["x4"],
+            "response_name": "outinvoices"
+        },
+        "FinishProtect": {
+            "root_name": "finishprotect",
+            "aliases": ["x5"],
+            "response_name": "operation"
+        },
+        "SendMsg": {
+            "root_name": "message",
+            "aliases": ["x6"]},
+        "ClassicAuth": {
+            "root_name": "testsign",
+            "aliases": ["x7"]
+        },
+        "InInvoices": {
+            "root_name": "getininvoices",
+            "aliases": ["x10"],
+            "response_name": "ininvoices"
+        }
+    }
     """
     Метаданные интерфейсов API Webmoney.
     Имеют следующую структуру::
@@ -204,63 +207,48 @@ class ApiInterface(object):
         return tree
 
     def _create_request(self, interface, **kwargs):
-        """
-        Создает словарь параметров запроса к api. Тут вызывается функция :func:`AuthInterface.wrap_request`
+        """Создает словарь параметров запроса к api.
+
+        Тут вызывается функция :func:`AuthInterface.wrap_request`.
         """
         request_params = {
-            "url": self.authStrategy.get_url_by_name(interface), "verify": False}
+            "url": self.authStrategy.get_url_by_name(interface),
+            "verify": False
+        }
 
         request_params = self.authStrategy.wrap_request(request_params)
 
         return request_params
 
     def _create_body(self, interface, **params):
-        """
-        Создает XML-тело запроса. Тут вызывается функция :func:`AuthInterface.wrap_body_tree`
+        """Создает XML-тело запроса.
+
+        Тут вызывается функция :func:`AuthInterface.wrap_body_tree`.
         """
         tree = etree.Element("w3s.request")
-
         reqn = params.pop("reqn", None)
         _ = etree.Element("reqn")
-
         if reqn:
             _.text = str(int(reqn))
         else:
             _.text = ""
-
         tree.append(_)
-
         tree.append(self._create_xml_request_params(interface, params))
-
         tree = self.authStrategy.wrap_body_tree(tree)
-
         return etree.tostring(tree)
 
     def _make_request(self, interface, **params):
-        """
-        Функция, делающая HTTP запрос к API
-        """
+        """Функция, делающая HTTP запрос к API."""
         request_params = self._create_request(interface, **params)
         body = self._create_body(interface, **params)
-
         request_params.update({"data": body})
-
-        # SSL v3 compability
-        # see http://docs.python-requests.org/en/latest/user/advanced/
-        s = r.Session()
+        s = Session()
         a = Ssl3HttpAdapter(max_retries=3)
         s.mount('https://', a)
-
         response = s.get(**request_params)
-
         if response.status_code != 200:
             raise ValueError("Bad response from webmoney api server: ({}) {}".format(response.status_code, response.text))
-
         out = xmltodict.parse(response.text)["w3s.response"]
-        # print out
-        # pprint(request_params)
-        # print self.API_METADATA[interface]["root_name"]
-
         try:
             response_name = self.API_METADATA[interface].get(
                 "response_name", None) or self.API_METADATA[interface]["root_name"]
@@ -270,7 +258,6 @@ class ApiInterface(object):
                 out["retval"], out["retdesc"]) + "\n" +\
                 u"Request data: %s" % pformat(request_params)
             raise ValueError(out.encode("utf-8"))
-
         return {"retval": out["retval"],
                 "retdesc": out["retdesc"],
                 "response": resp}
@@ -279,7 +266,6 @@ class ApiInterface(object):
         if name in ApiInterface.API_METADATA.keys():
             def _callback(**params):
                 return self._make_request(name, **params)
-
             return _callback
 
         for key, aliases in ApiInterface.API_METADATA.items():
@@ -288,5 +274,4 @@ class ApiInterface(object):
                 def _callback(**params):
                     return self._make_request(key, **params)
                 return _callback
-
         return object.__getattribute__(self, name)

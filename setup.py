@@ -16,7 +16,7 @@ VERSION = '0.1.0'
 
 REQUIRED = [
     'lxml==4.5.0',
-    'requests==2.23.0',
+    'requests==2.31.0',
     'wmsigner==0.1.1',
     'xmltodict==0.12.0'
 ]
